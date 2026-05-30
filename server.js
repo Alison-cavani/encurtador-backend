@@ -42,7 +42,7 @@ app.post('/api/encurtar', async (req, res) => {
     if (existingUrl) {
       return res.json({
         originalUrl: existingUrl.originalUrl,
-        shortUrl: `http://localhost:5000/${existingUrl.shortCode}`,
+        shortUrl: `${process.env.BASE_URL || 'http://localhost:5000'}/${existingUrl.shortCode}`,
         shortCode: existingUrl.shortCode
       });
     }
@@ -53,7 +53,7 @@ app.post('/api/encurtar', async (req, res) => {
     
     res.json({
       originalUrl: url,
-      shortUrl: `http://localhost:5000/${shortCode}`,
+      shortUrl: `${process.env.BASE_URL || 'http://localhost:5000'}/${shortCode}`,
       shortCode: shortCode
     });
   } catch (error) {
@@ -61,7 +61,7 @@ app.post('/api/encurtar', async (req, res) => {
   }
 });
 
-// ROTA PARA LISTAR URLs - ADICIONADA
+// ROTA PARA LISTAR URLs
 app.get('/api/urls', async (req, res) => {
   try {
     const urls = await Url.find().sort({ createdAt: -1 });
@@ -71,7 +71,7 @@ app.get('/api/urls', async (req, res) => {
   }
 });
 
-// ROTA PARA ESTATÍSTICAS - ADICIONADA
+// ROTA PARA ESTATÍSTICAS GERAIS
 app.get('/api/stats', async (req, res) => {
   try {
     const urls = await Url.find().sort({ clicks: -1 });
@@ -82,6 +82,7 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// ROTA PARA ESTATÍSTICAS POR CÓDIGO
 app.get('/api/stats/:shortCode', async (req, res) => {
   try {
     const url = await Url.findOne({ shortCode: req.params.shortCode });
@@ -92,8 +93,22 @@ app.get('/api/stats/:shortCode', async (req, res) => {
   }
 });
 
+// ROTA DE TESTE
+app.get('/api/teste', (req, res) => {
+  res.json({ message: 'Backend funcionando!' });
+});
+
+// ROTA RAIZ
+app.get('/', (req, res) => {
+  res.json({ message: 'API do Encurtador de URL está rodando!' });
+});
+
+// ROTA PARA REDIRECIONAMENTO (DEIXAR POR ÚLTIMO)
 app.get('/:shortCode', async (req, res) => {
   try {
+    // Ignorar rotas de API
+    if (req.params.shortCode === 'api') return next();
+    
     const url = await Url.findOne({ shortCode: req.params.shortCode });
     if (url) {
       url.clicks++;
@@ -106,20 +121,21 @@ app.get('/:shortCode', async (req, res) => {
   }
 });
 
-app.get('/api/teste', (req, res) => {
-  res.json({ message: 'Backend funcionando!' });
-});
-
-// Conectar ao MongoDB
+// Conectar ao MongoDB e iniciar servidor
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('✅ Conectado ao MongoDB');
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+    // IMPORTANTE: Listen em '0.0.0.0' para o Render
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Servidor rodando em http://0.0.0.0:${PORT}`);
       console.log(`📋 Lista: http://localhost:${PORT}/api/urls`);
+      console.log(`🌐 Base URL: ${process.env.BASE_URL || 'http://localhost:5000'}`);
     });
   })
   .catch(err => {
-    console.error('❌ Erro:', err.message);
-    process.exit(1);
+    console.error('❌ Erro ao conectar MongoDB:', err.message);
+    // Não encerra o processo, tenta rodar mesmo sem banco
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`⚠️ Servidor rodando SEM MongoDB na porta ${PORT}`);
+    });
   });
